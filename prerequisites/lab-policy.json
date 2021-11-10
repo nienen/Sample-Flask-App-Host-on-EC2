@@ -1,0 +1,84 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "tag:getResources",
+                "logs:*",
+                "codecommit:*",
+                "codedeploy:*",
+                "codepipeline:*",
+                "cloudformation:List*",
+                "cloudformation:Describe*",
+                "cloud9:*",
+                "sns:List*",
+                "cloudwatch:*",
+                "codebuild:ListProjects",
+                "ec2:Describe*",
+                "ec2:List*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:RequestedRegion": "<region>"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "kms:ListKeys",
+                "kms:ListKeyPolicies",
+                "kms:ListRetirableGrants",
+                "kms:ListAliases",
+                "kms:ListGrants",
+                "kms:DescribeKey",
+                "iam:List*",
+                "iam:Get*",
+                "iam:Generate*",
+                "s3:*",
+                "iam:CreatePolicy"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "DenyLabRole",
+            "Effect": "Deny",
+            "Action": [
+                "iam:*"
+            ],
+            "Resource": "arn:aws:iam::*:role/Lab-Role*"
+        },
+        {
+            "Sid": "EditServiceRole",
+            "Effect": "Allow",
+            "Action": [
+                "iam:AttachRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:GetRole",
+                "iam:GetRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies",
+                "iam:PutRolePolicy",
+                "iam:UpdateRole",
+                "iam:UpdateRoleDescription",
+                "iam:PassRole"
+            ],
+            "Resource": "arn:aws:iam::*:role/service-role/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "iam:AWSServiceName": [
+                        "cloud9.amazonaws.com"
+                    ]
+                }
+            }
+        }
+    ]
+}

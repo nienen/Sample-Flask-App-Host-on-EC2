@@ -1,0 +1,374 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  (Forntend) EC2 CICD pipeline prewarm
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: The ID of the AMI.
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+Resources:
+  RoleForEC2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Lab_Role_For_EC2
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  IamPolicyForEC2:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lab_policy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - s3:*
+              - ssm:Describe*
+              - ssm:Get*
+              - ssm:List*
+            Resource: '*'
+      Roles: 
+          - Ref: RoleForEC2
+  CodeDeployServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: CodeDeployRoleForLab
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /service-role/
+      Policies:
+        - PolicyName: codedeployservicepolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Resource:
+              - "*"
+              Action:
+              - ec2:*
+              - autoscaling:*
+              - logs:*
+              - tag:GetResources
+              - sns:Publish
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:PutMetricAlarm
+              - elasticloadbalancing:DescribeLoadBalancers
+              - elasticloadbalancing:DescribeInstanceHealth
+              - elasticloadbalancing:RegisterInstancesWithLoadBalancer
+              - elasticloadbalancing:DeregisterInstancesFromLoadBalancer
+              - elasticloadbalancing:DescribeTargetGroups
+              - elasticloadbalancing:DescribeTargetHealth
+              - elasticloadbalancing:RegisterTargets
+              - elasticloadbalancing:DeregisterTargets
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: CodePipelineRoleForLab
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /service-role/
+      Policies:
+        - PolicyName: codebuildservicepolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - iam:PassRole
+              Resource: "*"
+              Effect: Allow
+              Condition:
+                StringEqualsIfExists:
+                  iam:PassedToService:
+                  - cloudformation.amazonaws.com
+                  - elasticbeanstalk.amazonaws.com
+                  - ec2.amazonaws.com
+                  - ecs-tasks.amazonaws.com
+            - Action:
+              - codecommit:CancelUploadArchive
+              - codecommit:GetBranch
+              - codecommit:GetCommit
+              - codecommit:GetRepository
+              - codecommit:GetUploadArchiveStatus
+              - codecommit:UploadArchive
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - codedeploy:CreateDeployment
+              - codedeploy:GetApplication
+              - codedeploy:GetApplicationRevision
+              - codedeploy:GetDeployment
+              - codedeploy:GetDeploymentConfig
+              - codedeploy:RegisterApplicationRevision
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - codestar-connections:UseConnection
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - elasticbeanstalk:*
+              - ec2:*
+              - elasticloadbalancing:*
+              - autoscaling:*
+              - cloudwatch:*
+              - s3:*
+              - sns:*
+              - cloudformation:*
+              - rds:*
+              - sqs:*
+              - ecs:*
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - lambda:InvokeFunction
+              - lambda:ListFunctions
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - opsworks:CreateDeployment
+              - opsworks:DescribeApps
+              - opsworks:DescribeCommands
+              - opsworks:DescribeDeployments
+              - opsworks:DescribeInstances
+              - opsworks:DescribeStacks
+              - opsworks:UpdateApp
+              - opsworks:UpdateStack
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - cloudformation:CreateStack
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStacks
+              - cloudformation:UpdateStack
+              - cloudformation:CreateChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:DescribeChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:SetStackPolicy
+              - cloudformation:ValidateTemplate
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - codebuild:BatchGetBuilds
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuildBatches
+              - codebuild:StartBuildBatch
+              Resource: "*"
+              Effect: Allow
+            - Effect: Allow
+              Action:
+              - devicefarm:ListProjects
+              - devicefarm:ListDevicePools
+              - devicefarm:GetRun
+              - devicefarm:GetUpload
+              - devicefarm:CreateUpload
+              - devicefarm:ScheduleRun
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - servicecatalog:ListProvisioningArtifacts
+              - servicecatalog:CreateProvisioningArtifact
+              - servicecatalog:DescribeProvisioningArtifact
+              - servicecatalog:DeleteProvisioningArtifact
+              - servicecatalog:UpdateProduct
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - cloudformation:ValidateTemplate
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - ecr:DescribeImages
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - states:DescribeExecution
+              - states:DescribeStateMachine
+              - states:StartExecution
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - appconfig:StartDeployment
+              - appconfig:StopDeployment
+              - appconfig:GetDeployment
+              Resource: "*"
+  EC2InstanceProfile: 
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: Lab_Instance_Porfile
+      Path: /
+      Roles: 
+      - !Ref RoleForEC2
+  LabVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Lab_VPC
+  WebSecurityGroup:  
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Web SG"
+      GroupDescription: "Security group with allow HTTP"
+      VpcId: !Ref LabVPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Lab_VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref LabVPC
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref LabVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC Public Subnet 1
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref LabVPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC Public Subnet 2
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref LabVPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Lab VPC Private Subnet 1
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref LabVPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Lab VPC Private Subnet 2
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref LabVPC
+      Tags:
+        - Key: Name
+          Value: Lab VPC Public Route
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      ImageId: !Ref ImageId
+      InstanceType: 't2.micro'
+      SecurityGroupIds: 
+        - !GetAtt WebSecurityGroup.GroupId
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags: 
+        - Key: Name
+          Value: flask-app
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -xe
+            cd /home/ec2-user
+            sudo yum install ruby -y
+            sudo yum install wget -y
+            wget https://aws-codedeploy-us-west-2.s3.us-west-2.amazonaws.com/latest/install
+            sudo chmod +x ./install
+            sudo ./install auto
+            sudo service codedeploy-agent start
+            sudo service codedeploy-agent status
+Outputs:
+  CodeDeployServiceRoleName:
+    Value: !Ref CodeDeployServiceRole
+    Description: Name of CodeDeploy Service Role
+  CodePipelineServiceRoleName:
+    Value: !Ref CodePipelineServiceRole
+    Description: Name of CodePipeline Service Role
